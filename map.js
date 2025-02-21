@@ -8,6 +8,13 @@
    let filteredDepartures = new Map();
    let filteredStations = [];
 
+   let departuresByMinute = Array.from({ length: 1440 }, () => []);
+   let arrivalsByMinute = Array.from({ length: 1440 }, () => []);
+
+   let stations = [];
+   let trips = [];
+   const svg = d3.select('#map').select('svg');
+
 
    // Initialize the map
    const map = new mapboxgl.Map({
@@ -56,9 +63,7 @@
   });
 
 
-  let stations = [];
-  let trips = [];
-  const svg = d3.select('#map').select('svg');
+ 
 
    
   map.on('load', () => {
@@ -102,7 +107,7 @@
 
                 const radiusScale = d3.scaleSqrt()
                 .domain([0, d3.max(stations, d => d.totalTraffic)])  // Use filteredStations
-                .range(timeFilter === -1 ? [0, 20] : [3, 50]);
+                .range(timeFilter === -1 ? [0, 25] : [3, 50]);
 
                 // Append circles to the SVG for each station
                 const circles = svg.selectAll('circle')
@@ -137,7 +142,17 @@
                 for (let trip of trips) {
                     trip.started_at = new Date(trip.started_at);
                     trip.ended_at = new Date(trip.ended_at);
+                    // Get the minutes since midnight for the start and end times
+                    let startedMinutes = minutesSinceMidnight(trip.started_at);
+                    let endedMinutes = minutesSinceMidnight(trip.ended_at);
+
+                    // Track the departures by minute
+                    departuresByMinute[startedMinutes].push(trip);
+
+                    // Track the arrivals by minute (new part)
+                    arrivalsByMinute[endedMinutes].push(trip);
                 }                
+                
             })
             .catch(error => {
                 console.error('Error loading CSV:', error);
@@ -189,75 +204,64 @@ function updateTimeDisplay() {
 
 timeSlider.addEventListener('input', updateTimeDisplay);
 
+
 function filterTripsByTime() {
-    filteredTrips = timeFilter === -1
-        ? trips
-        : trips.filter(trip => {
-            const startedMinutes = minutesSinceMidnight(trip.started_at);
-            const endedMinutes = minutesSinceMidnight(trip.ended_at);
-            return (
-                Math.abs(startedMinutes - timeFilter) <= 60 ||
-                Math.abs(endedMinutes - timeFilter) <= 60
-            );
-        });
-
-    filteredDepartures = d3.rollup(
-        filteredTrips,
-        v => v.length,
-        d => d.start_station_id
-    );
-
-    filteredArrivals = d3.rollup(
-        filteredTrips,
-        v => v.length,
-        d => d.end_station_id
-    );
+    let filteredDepartures = filterByMinute(departuresByMinute, timeFilter);
+    let filteredArrivals = filterByMinute(arrivalsByMinute, timeFilter);
 
     filteredStations = stations.map(station => {
         let id = station.short_name;
+
+        const stationArrivals = filteredArrivals.filter(d => d.end_station_id === id).length;
+        const stationDepartures = filteredDepartures.filter(d => d.start_station_id === id).length;
+
         return {
             ...station,
-            arrivals: filteredArrivals.get(id) ?? 0,
-            departures: filteredDepartures.get(id) ?? 0,
-            totalTraffic: (filteredArrivals.get(id) ?? 0) + (filteredDepartures.get(id) ?? 0),
+            arrivals: stationArrivals,
+            departures: stationDepartures,
+            totalTraffic: stationArrivals + stationDepartures,
         };
-    });           
-    // console.log('Filtered Stations:', filteredStations);
+    });
+    console.log(stations);
+    console.log(filteredStations);
 
-    radiusScale2 = d3.scaleSqrt()
-                    .domain([0, d3.max(stations, d => d.totalTraffic)])  // Use filteredStations
-                    .range(timeFilter === -1 ? [0, 25] : [3, 50]);
+    // Recalculate the radius scale based on filtered data
+    const radiusScale2 = d3.scaleSqrt()
+    .domain([0, d3.max(filteredStations, d => d.totalTraffic)])
+    .range([0, 40]);
 
-    // Remove previous circles before adding new ones
-    svg.selectAll('circle').remove();
+    svg.selectAll('circle')
+    .data(filteredStations)
+    .join(
+        enter => enter.append('circle').attr('r', d => radiusScale2(d.totalTraffic)), // Append only when new
+        update => update.attr('r', d => radiusScale2(d.totalTraffic)), // Update existing ones
+        exit => exit.remove()  // Remove those that no longer match
+    )
+    .attr('opacity', 0.8)
+    .each(function(d) {
+        // Remove existing title if any
+        d3.select(this).select('title').remove();
+        
+        // Append new title with updated data
+        d3.select(this)
+            .append('title')
+            .text(`${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`);
+    });
 
-    // Append new circles for filtered stations
-    const circles = svg.selectAll('circle')
-        .data(filteredStations)
-        .enter()
-        .append('circle')
-        .attr('r', d => radiusScale2(d.totalTraffic))
-        .attr('fill', 'steelblue')
-        .attr('stroke', 'white')
-        .attr('stroke-width', 1)
-        .attr('opacity', 0.8)
-        .each(function(d) {
-            d3.select(this)
-                .append('title')
-                .text(`${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`);
-        });
-
-    function updatePositions() {
-        circles.attr('cx', d => getCoords(d).cx)
-                .attr('cy', d => getCoords(d).cy);
-    }
-
-    // Initial position update
-    updatePositions();
-
-    // Update on map interactions
-    map.on('move', updatePositions);
-    map.on('zoom', updatePositions);
-    map.on('resize', updatePositions);
-    map.on('moveend', updatePositions);
 }
+
+
+function filterByMinute(tripsByMinute, minute) {
+    // Normalize both to the [0, 1439] range
+    // % is the remainder operator: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Remainder
+    let minMinute = (minute - 60 + 1440) % 1440;
+    let maxMinute = (minute + 60) % 1440;
+  
+    if (minMinute > maxMinute) {
+      let beforeMidnight = tripsByMinute.slice(minMinute);
+      let afterMidnight = tripsByMinute.slice(0, maxMinute);
+      return beforeMidnight.concat(afterMidnight).flat();
+    } else {
+      return tripsByMinute.slice(minMinute, maxMinute).flat();
+    }
+  }
