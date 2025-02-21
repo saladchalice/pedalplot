@@ -118,7 +118,8 @@
                     .attr('fill', 'steelblue')
                     .attr('stroke', 'white')
                     .attr('stroke-width', 1)
-                    .attr('opacity', 0.8)
+                    .attr('opacity', 0.7)
+                    .style("--departure-ratio", d => stationFlow(d.departures / d.totalTraffic)) 
                     .each(function(d) {
                         d3.select(this)
                             .append('title')
@@ -262,7 +263,7 @@ function updateCircles(filteredStations) {
     // Recalculate the radius scale based on filtered data
     const radiusScale2 = d3.scaleSqrt()
     .domain([0, d3.max(stations, d => d.totalTraffic)])  // Use filteredStations
-    .range(timeFilter === -1 ? [0, 25] : [3, 60]);
+    .range(timeFilter === -1 ? [0, 25] : [0, 60]);
 
     // Update the circles
     const circles = svg.selectAll('circle')
@@ -275,11 +276,13 @@ function updateCircles(filteredStations) {
         .merge(circles) // Merge new data with existing circles
         .transition().duration(100)  // Smooth transition for updates
         .attr('r', d => radiusScale2(d.totalTraffic)) // Update radius based on new data
+        .style("--departure-ratio", d => stationFlow(d.departures / d.totalTraffic)) 
         .each(function(d) {
             d3.select(this).select('title').text(
                 `${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`
             );
         });
+        
 
     // Remove circles if they no longer exist in the filtered data
     circles.exit().remove();

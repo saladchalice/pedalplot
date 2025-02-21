@@ -72,9 +72,59 @@ em {
 
 circle {
     pointer-events: auto;
+    --color-departures: steelblue;
+    --color-arrivals: darkorange;
+    --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+    );
+    fill: var(--color);
 }
+
 
 circle:hover {
     cursor: pointer;
 }
+
+.legend{
+    display:flex;
+    gap: 15px;
+    margin-top:10px;
+}
+
+.legend label{
+    display:inline-flex;
+    align-self: center;
+    margin-top:5px;
+    font-size:.9em;
+    color:darkgrey;
+    font-weight:400;
+}
+
+.legend > div {
+    /* colors */
+    --color-departures: steelblue;
+    --color-arrivals: darkorange;
+    --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+    );
+    fill: var(--color);
+    align-self: center;
+}
+
+
+.legend > div::before {
+    content: "";
+    display: inline-block;
+    width: 15px; /* Size of the color swatch */
+    height: 15px; /* Size of the color swatch */
+    border-radius: 50%; /* Makes the swatch circular */
+    background-color: var(--color); /* Background set to the defined color */
+    margin-right: 5px; /* Optional: space between the swatch and label */
+    gap: 2px; /* Adjust the gap if needed */
+}
+
 
