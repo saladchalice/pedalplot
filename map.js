@@ -74,9 +74,10 @@
             return { cx: x, cy: y };
         }
 
+
         // Load traffic data
         d3.csv('https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv')
-            .then(trips => {            
+            .then(trips => {     
                 const departures = d3.rollup(
                     trips,
                     v => v.length,
@@ -135,9 +136,10 @@
             
                 // Filtering logic
                 for (let trip of trips) {
-                    trip.started_at = new Date(trip.start_time);
-                    trip.ended_at = new Date(trip.end_time);
+                    trip.started_at = new Date(trip.started_at);
+                    trip.ended_at = new Date(trip.ended_at);
                 }
+
 
                 function minutesSinceMidnight(date) {
                     return date.getHours() * 60 + date.getMinutes();
@@ -173,7 +175,6 @@
                 timeSlider.addEventListener('input', updateTimeDisplay);
             
                 function filterTripsByTime() {
-                    console.log('begin');
                     filteredTrips = timeFilter === -1
                         ? trips
                         : trips.filter(trip => {
@@ -184,7 +185,6 @@
                                 Math.abs(endedMinutes - timeFilter) <= 60
                             );
                         });
-                    console.log(filteredTrips);
             
                     filteredDepartures = d3.rollup(
                         filteredTrips,
@@ -206,8 +206,7 @@
                             departures: filteredDepartures.get(id) ?? 0,
                             totalTraffic: (arrivals.get(id) ?? 0) + (departures.get(id) ?? 0),
                         };
-                    });
-            
+                    });           
                     // console.log('Filtered Stations:', filteredStations);
                 }
             })
